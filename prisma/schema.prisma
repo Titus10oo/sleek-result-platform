@@ -1,0 +1,306 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  ACCOUNTANT
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+model Tenant {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  subdomain    String?      @unique
+  logo         String?
+  address      String?
+  contactEmail String
+  contactPhone String?
+  status       TenantStatus @default(TRIAL)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  users            User[]
+  classes          Class[]
+  arms             Arm[]
+  subjects         Subject[]
+  students         Student[]
+  teachers         Teacher[]
+  terms            Term[]
+  sessions         AcademicSession[]
+  reportCards      ReportCard[]
+  invoices         Invoice[]
+  feeTemplates     FeeTemplate[]
+  timetables       Timetable[]
+  assessments      Assessment[]
+  invoiceItems     InvoiceItem[]
+  payments         Payment[]
+  studentLedgers   StudentLedger[]
+  attendances      Attendance[]
+  timetableEntries TimetableEntry[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacherProfile Teacher?
+  studentProfile Student?
+
+  @@unique([email, tenantId])
+}
+
+model AcademicSession {
+  id       String  @id @default(cuid())
+  name     String // e.g. "2023/2024"
+  active   Boolean @default(false)
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  terms    Term[]
+  classes  Class[]
+}
+
+model Term {
+  id          String          @id @default(cuid())
+  name        String // e.g. "First Term"
+  active      Boolean         @default(false)
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  sessionId   String
+  session     AcademicSession @relation(fields: [sessionId], references: [id])
+  assessments Assessment[]
+  reportCards ReportCard[]
+}
+
+model Class {
+  id         String           @id @default(cuid())
+  name       String // e.g. "JSS 1"
+  tenantId   String
+  tenant     Tenant           @relation(fields: [tenantId], references: [id])
+  arms       Arm[]
+  students   Student[]
+  sessionId  String?
+  session    AcademicSession? @relation(fields: [sessionId], references: [id])
+  timetables Timetable[]
+}
+
+model Arm {
+  id         String      @id @default(cuid())
+  name       String // e.g. "A" or "Gold"
+  classId    String
+  class      Class       @relation(fields: [classId], references: [id])
+  tenantId   String
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  students   Student[]
+  timetables Timetable[]
+}
+
+model Subject {
+  id               String           @id @default(cuid())
+  name             String
+  code             String?
+  tenantId         String
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  teachers         SubjectTeacher[]
+  assessments      Assessment[]
+  timetableEntries TimetableEntry[]
+}
+
+model Teacher {
+  id       String           @id @default(cuid())
+  userId   String           @unique
+  user     User             @relation(fields: [userId], references: [id])
+  tenantId String
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  subjects SubjectTeacher[]
+}
+
+model SubjectTeacher {
+  id        String  @id @default(cuid())
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+  tenantId  String
+}
+
+model Student {
+  id           String         @id @default(cuid())
+  admissionNum String         @unique
+  userId       String         @unique
+  user         User           @relation(fields: [userId], references: [id])
+  classId      String
+  class        Class          @relation(fields: [classId], references: [id])
+  armId        String
+  arm          Arm            @relation(fields: [armId], references: [id])
+  parentId     String?
+  tenantId     String
+  tenant       Tenant         @relation(fields: [tenantId], references: [id])
+  assessments  Assessment[]
+  reportCards  ReportCard[]
+  invoices     Invoice[]
+  ledger       StudentLedger?
+  attendance   Attendance[]
+}
+
+model Assessment {
+  id        String  @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  termId    String
+  term      Term    @relation(fields: [termId], references: [id])
+  score     Float
+  weight    Float // e.g. 10.0 for 10%
+  type      String // e.g. "CA1", "CA2", "EXAM"
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+model ReportCard {
+  id               String  @id @default(cuid())
+  studentId        String
+  student          Student @relation(fields: [studentId], references: [id])
+  termId           String
+  term             Term    @relation(fields: [termId], references: [id])
+  totalScore       Float
+  averageScore     Float
+  grade            String
+  position         Int?
+  comments         String?
+  principalComment String?
+  tenantId         String
+  tenant           Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+model FeeTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  amount      Float
+  description String?
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  studentId String
+  student   Student       @relation(fields: [studentId], references: [id])
+  amount    Float
+  status    InvoiceStatus @default(UNPAID)
+  dueDate   DateTime
+  items     InvoiceItem[]
+  payments  Payment[]
+  tenantId  String
+  tenant    Tenant        @relation(fields: [tenantId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+enum InvoiceStatus {
+  PAID
+  PARTIAL
+  UNPAID
+  OVERDUE
+}
+
+model InvoiceItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  name      String
+  amount    Float
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
+  amount      Float
+  method      String // e.g. "BANK_TRANSFER", "CARD", "CASH"
+  status      PaymentStatus @default(PENDING)
+  reference   String?       @unique
+  evidenceUrl String?
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  createdAt   DateTime      @default(now())
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model StudentLedger {
+  id        String   @id @default(cuid())
+  studentId String   @unique
+  student   Student  @relation(fields: [studentId], references: [id])
+  balance   Float    @default(0)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  updatedAt DateTime @updatedAt
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  date      DateTime
+  status    String // e.g. "PRESENT", "ABSENT", "LATE"
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model Timetable {
+  id       String           @id @default(cuid())
+  classId  String
+  class    Class            @relation(fields: [classId], references: [id])
+  armId    String
+  arm      Arm              @relation(fields: [armId], references: [id])
+  tenantId String
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  entries  TimetableEntry[]
+}
+
+model TimetableEntry {
+  id          String    @id @default(cuid())
+  timetableId String
+  timetable   Timetable @relation(fields: [timetableId], references: [id])
+  subjectId   String
+  subject     Subject   @relation(fields: [subjectId], references: [id])
+  dayOfWeek   Int // 1-7
+  startTime   String // e.g. "08:00"
+  endTime     String // e.g. "09:00"
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+}
